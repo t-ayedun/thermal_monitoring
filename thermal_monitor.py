@@ -527,13 +527,23 @@ def main():
         duration = None
         print("Invalid input, running continuously. Press Ctrl+C to stop.")
     
+    # Create the monitor instance
     monitor = ThermalMonitor(mock_mode=False)
+    
+    # Get first reading using same method as in run_monitoring
+    temps = monitor.read_thermal_frame()
+    if temps:
+        monitor.display_live_stats(temps)
+        print()  # Line break for neatness
+    
+    # Now start monitoring loop
     monitor.run_monitoring(duration_minutes=duration)
     
     # Show data file location
     if os.path.exists(ThermalConfig.DATA_FILE):
         print(f"\n📄 Data saved to: {os.path.abspath(ThermalConfig.DATA_FILE)}")
         print(f"📁 Logs directory: {os.path.abspath('logs/')}")
+    
 
 if __name__ == "__main__":
     main()
