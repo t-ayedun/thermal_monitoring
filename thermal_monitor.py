@@ -546,4 +546,36 @@ def main():
     
 
 if __name__ == "__main__":
-    main()
+    monitor = ThermalMonitor()
+
+    print("=== Transformer Thermal Camera ===")
+    print("1. Calibrate Sensor")
+    print("2. Start Monitoring")
+    print("3. Exit")
+
+    choice = input("Select an option (1/2/3): ").strip()
+
+    if choice == "1":
+        print("\n🔧 Starting calibration...")
+        monitor.calibrate()
+
+        # After calibration, ask if user wants to monitor immediately
+        start_now = input("\n✅ Calibration complete. Start monitoring now? (y/n): ").strip().lower()
+        if start_now == "y":
+            duration = input("Enter duration in minutes (leave empty for unlimited): ").strip()
+            duration = float(duration) if duration else None
+            monitor.run_monitoring(duration_minutes=duration)
+        else:
+            print("👋 Exiting.")
+
+    elif choice == "2":
+        print("\n📡 Starting monitoring...")
+        duration = input("Enter duration in minutes (leave empty for unlimited): ").strip()
+        duration = float(duration) if duration else None
+        monitor.run_monitoring(duration_minutes=duration)
+
+    elif choice == "3":
+        print("👋 Exiting.")
+
+    else:
+        print("❌ Invalid choice.")
