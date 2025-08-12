@@ -1,0 +1,15 @@
+2025-08-04 17:32:37,297 - WARNING - Warning temperature: 65.1°C
+2025-08-04 17:32:37,304 - WARNING - Warning temperature: 65.0°C
+2025-08-04 17:32:37,304 - CRITICAL - CRITICAL TEMPERATURE: 85.0°C
+2025-08-04 17:32:54,003 - INFO - Starting thermal monitoring...
+2025-08-04 17:32:54,013 - WARNING - Warning temperature: 65.0°C
+2025-08-04 17:32:54,013 - INFO - Temperature range: 24.2°C to 65.0°C
+2025-08-04 17:32:54,013 - WARNING - Warning temperature: 65.0°C
+2025-08-04 17:32:55,017 - WARNING - Warning temperature: 72.4°C
+2025-08-04 17:32:57,024 - WARNING - Warning temperature: 64.7°C
+2025-08-04 17:32:57,526 - WARNING - Warning temperature: 64.0°C
+2025-08-04 17:32:58,027 - WARNING - Warning temperature: 60.1°C
+2025-08-04 17:32:59,032 - WARNING - Warning temperature: 61.8°C
+2025-08-04 17:33:02,044 - WARNING - Warning temperature: 65.6°C
+2025-08-04 17:33:03,048 - WARNING - Warning temperature: 61.1°C
+2025-08-04 17:33:03,550 - WARNING - Warning temperature: 65.7°C
