@@ -284,7 +284,7 @@ class EnhancedThermalMonitor:
         self.setup_logging()
         
         # Initialize components
-        self.data_aggregator = ThermalDataAggregator(aggregation_interval=60)  # 1 minute
+        self.data_aggregator = ThermalDataAggregator(aggregation_interval=600)  # 10 minutes
         self.aws_publisher = AWSIoTPublisher()
         self.testbed = TestbedIntegration()
         
