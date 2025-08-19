@@ -550,12 +550,16 @@ class TestbedIntegration:
 
 
 # ====== MAIN THERMAL MONITOR (Merged Production + IoT) ======
-"""class ProductionThermalMonitor:
-    #Main thermal monitoring system combining production safety with IoT capabilities
-    
-    def __init__(self, simulation_mode=False):
+class ProductionThermalMonitor:
+    #Main thermal monitoring system combining production safety with IoT capabilities  
+    def __init__(self, simulation_mode=False, aggregation_interval='10min', simple_mode=True):
         self.simulation_mode = simulation_mode
+        self.simple_mode = simple_mode
         self.running = True
+        # Set aggregation interval
+        if aggregation_interval in ThermalConfig.AGGREGATION_INTERVAL_OPTIONS:
+            interval_seconds = ThermalConfig.AGGREGATION_INTERVAL_OPTIONS[aggregation_interval]
+            ThermalConfig.AGGREGATION_INTERVAL = interval_seconds
         
         # === PRODUCTION SAFETY COMPONENTS ===
         self.temperature_buffer = []        # For smoothing (Production Safety)
@@ -569,9 +573,18 @@ class TestbedIntegration:
         self.aws_publisher = AWSIoTPublisher()
         self.testbed = TestbedIntegration()
         
+            # === SIMPLE DISPLAY ===
+        if simple_mode:
+            self.display = SimpleDisplay(ThermalConfig.AGGREGATION_INTERVAL)
+            # Reduce logging noise
+            logging.getLogger().setLevel(logging.WARNING)
+
         # === DATA PERSISTENCE ===
         self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.csv_file = f"thermal_aggregated_{self.session_id}.csv"
+        if simple_mode:
+            self.csv_file = f"thermal_{aggregation_interval}_{self.session_id}.csv"
+        else:
+            self.csv_file = f"thermal_aggregated_{self.session_id}.csv"
         self.detailed_csv = f"thermal_detailed_{datetime.now().strftime('%Y%m%d')}.csv"  # Daily file
         self.init_csv_files()
         
@@ -582,7 +595,7 @@ class TestbedIntegration:
         logger.info("🔧 ThermalMonitor initialized (simulation=%s)", simulation_mode)
     
     def init_csv_files(self):
-        Initialize CSV files with improved naming and structure
+        #Initialize CSV files with improved naming and structure
         
         # === AGGREGATED DATA CSV (1-minute summaries) ===
         agg_headers = [
@@ -611,13 +624,13 @@ class TestbedIntegration:
             logger.info(f"📝 Appending to existing detailed CSV: {self.detailed_csv}")
     
     def signal_handler(self, sig, frame):
-        ""Handle shutdown signals gracefully (IoT Enhancement)""
+        #Handle shutdown signals gracefully (IoT Enhancement)
         logger.info(f"📶 Received signal {sig}, initiating graceful shutdown...")
         self.running = False
     
     # === SENSOR INITIALIZATION (Production Safety) ===
     def _initialize_sensor(self):
-        ""Initialize MLX90640 with production safety checks""
+        #Initialize MLX90640 with production safety checks
         if self.simulation_mode or not _HW_AVAILABLE:
             self.sensor = MockMLX90640()
             logger.info("🔧 Running in SIMULATION MODE")
@@ -645,7 +658,7 @@ class TestbedIntegration:
             return False
 
     def sensor_health_check(self):
-        ""Comprehensive sensor health validation (Production Safety)""
+        #Comprehensive sensor health validation (Production Safety)
         logger.info("🔍 Performing sensor health check...")
         
         try:
@@ -952,29 +965,35 @@ class TestbedIntegration:
         return payload
 
     def display_live_stats(self, temps):
-        #Real-time display with safety status (Production Safety)
-        try:
-            status = self.check_temperature_alerts(temps)
-        except Exception:
-            status = "UNKNOWN"
+    #Real-time display with safety status (Production Safety)
+        if hasattr(self, 'simple_mode') and self.simple_mode:
+            # Use simple display
+            self.display.show_current_reading(temps, self.reading_count)
+        else:
+            # Original detailed display
+            try:
+                status = self.check_temperature_alerts(temps)
+            except Exception:
+                status = "UNKNOWN"
 
-        status_icon = {
-            'NORMAL': '✅',
-            'ELEVATED': '📈', 
-            'WARNING': '⚠️',
-            'CRITICAL': '🔴',
-            'EMERGENCY': '🚨',
-            'UNKNOWN': '❓'
-        }.get(status, '❓')
+            status_icon = {
+                'NORMAL': '✅',
+                'ELEVATED': '📈', 
+                'WARNING': '⚠️',
+                'CRITICAL': '🔴',
+                'EMERGENCY': '🚨',
+                'UNKNOWN': '❓'
+            }.get(status, '❓')
 
-        # Enhanced live display
-        gradient = temps['max_temp'] - temps['min_temp']
-        print(f"\r{status_icon} Avg: {temps['avg_temp']:.1f}°C | " +
-              f"Range: [{temps['min_temp']:.1f}, {temps['max_temp']:.1f}]°C | " +
-              f"∇: {gradient:.1f}°C | " +
-              f"Pixels: {temps['valid_pixels']}/768 | " +
-              f"Count: {self.reading_count} | " +
-              f"{datetime.now().strftime('%H:%M:%S')}", end='', flush=True)
+            # Enhanced live display
+            gradient = temps['max_temp'] - temps['min_temp']
+            print(f"\r{status_icon} Avg: {temps['avg_temp']:.1f}°C | " +
+                f"Range: [{temps['min_temp']:.1f}, {temps['max_temp']:.1f}]°C | " +
+                f"∇: {gradient:.1f}°C | " +
+                f"Pixels: {temps['valid_pixels']}/768 | " +
+                f"Count: {self.reading_count} | " +
+                f"{datetime.now().strftime('%H:%M:%S')}", end='', flush=True)
+
 
     # === MAIN MONITORING LOOP (Merged Production + IoT) ===
     def run_monitoring(self, duration_minutes=None):
@@ -1068,11 +1087,15 @@ class TestbedIntegration:
                             success = self.aws_publisher.publish_data(aws_payload, highest_alert_level)
                             if not success:
                                 logger.warning("📡 AWS IoT publish failed")
-                        
-                        # Log 1-minute summary
-                        avg_temp = aggregated_data['temperature_stats']['avg_temp']['value']
-                        sample_count = aggregated_data['sample_count']
-                        logger.info(f"📊 1-min summary: {avg_temp:.1f}°C avg from {sample_count} samples (alert: {highest_alert_level})")
+
+                        # Show aggregation summary
+                        if hasattr(self, 'simple_mode') and self.simple_mode:
+                            self.display.show_aggregated_summary(aggregated_data, power_data)
+                        else:
+                            # Original logging
+                            avg_temp = aggregated_data['temperature_stats']['avg_temp']['value']
+                            sample_count = aggregated_data['sample_count']
+                            logger.info(f"📊 summary: {avg_temp:.1f}°C avg from {sample_count} samples (alert: {highest_alert_level})")
                         
                         # Reset alert level for next period
                         highest_alert_level = "NORMAL"
@@ -1134,7 +1157,7 @@ class TestbedIntegration:
 """
 # Simplified monitoring class with clean output
 class SimplifiedThermalMonitor:
-    """Simplified thermal monitor with clean, minimal output"""
+    #Simplified thermal monitor with clean, minimal output
     
     def __init__(self, simulation_mode=False, aggregation_interval='10min', verbose=False):
         self.simulation_mode = simulation_mode
@@ -1166,7 +1189,7 @@ class SimplifiedThermalMonitor:
             logging.getLogger().setLevel(logging.WARNING)
     
     def init_simple_csv(self):
-        """Initialize CSV with simple, clear headers"""
+        #Initialize CSV with simple, clear headers
         headers = [
             'timestamp', 'session_id', 'interval_minutes', 'sample_count',
             'min_temp_c', 'avg_temp_c', 'max_temp_c', 'temp_range_c', 
@@ -1180,12 +1203,12 @@ class SimplifiedThermalMonitor:
             print(f"📝 Initialized CSV: {self.csv_file}")
     
     def signal_handler(self, sig, frame):
-        """Handle shutdown signals gracefully"""
+        #Handle shutdown signals gracefully
         print(f"\n🛑 Stopping monitor...")
         self.running = False
     
     def initialize_sensor(self):
-        """Initialize sensor with minimal output"""
+        #Initialize sensor with minimal output
         if self.simulation_mode or not _HW_AVAILABLE:
             self.sensor = MockMLX90640()
             if self.verbose:
@@ -1205,7 +1228,7 @@ class SimplifiedThermalMonitor:
             return False
     
     def read_thermal_data(self):
-        """Read thermal frame with error handling"""
+        #Read thermal frame with error handling
         try:
             frame = [0] * 768
             if self.simulation_mode:
@@ -1234,7 +1257,7 @@ class SimplifiedThermalMonitor:
             return None
     
     def get_status(self, max_temp):
-        """Get simple status based on temperature"""
+        #Get simple status based on temperature
         if max_temp >= ThermalConfig.TEMP_EMERGENCY:
             return "EMERGENCY"
         elif max_temp >= ThermalConfig.TEMP_CRITICAL:
@@ -1247,7 +1270,7 @@ class SimplifiedThermalMonitor:
             return "NORMAL"
     
     def save_aggregated_summary(self, aggregated_data):
-        """Save simple aggregated data to CSV"""
+        #Save simple aggregated data to CSV
         try:
             temp_stats = aggregated_data['temperature_stats']
             
@@ -1281,7 +1304,7 @@ class SimplifiedThermalMonitor:
                 print(f"❌ CSV save error: {e}")
     
     def run_simplified_monitoring(self, duration_minutes=None):
-        """Main simplified monitoring loop"""
+        #Main simplified monitoring loop
         
         print(f"🌡️  Starting Thermal Monitor")
         print(f"📊 Aggregation: {self.display.interval_name} intervals")
@@ -1361,7 +1384,7 @@ class SimplifiedThermalMonitor:
         return True
     
     def create_simple_aws_payload(self, aggregated_data):
-        """Create simple AWS payload"""
+        #Create simple AWS payload
         temp_stats = aggregated_data['temperature_stats']
         return {
             'device_id': 'thermal-camera-01',
@@ -1376,10 +1399,10 @@ class SimplifiedThermalMonitor:
         }
     
     def cleanup(self):
-        """Simple cleanup"""
+        #Simple cleanup
         if self.aws_publisher and self.aws_publisher.is_connected:
             self.aws_publisher.disconnect()
-
+"""
 
 
 # ====== CALIBRATION HELPER (Production Safety) ======
@@ -1610,27 +1633,66 @@ Examples:
         logger.error(f"❌ Error in main: {e}")
 """
 
-# Enhanced main function
 def main():
-    parser = create_enhanced_parser()
-    args = parser.parse_args()
-    
-    # Set up configuration based on arguments
-    ThermalConfig.SIMPLE_OUTPUT = not args.verbose
-    
-    # Create and run simplified monitor
-    monitor = SimplifiedThermalMonitor(
-        simulation_mode=args.simulation,
-        aggregation_interval=args.interval,
-        verbose=args.verbose
+    parser = argparse.ArgumentParser(
+        description='Production-Safe IoT-Enabled MLX90640 Thermal Monitor',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s --interval 10min          # 10-minute summaries (recommended)
+  %(prog)s --interval 30min          # 30-minute summaries  
+  %(prog)s --simulation --interval 1min   # Quick testing with 1-min intervals
+  %(prog)s --duration 60 --interval 5min  # Monitor for 1 hour with 5-min summaries
+        """
     )
     
-    success = monitor.run_simplified_monitoring(duration_minutes=args.duration)
+    parser.add_argument('--interval', 
+                       choices=['1min', '5min', '10min', '30min', '60min'],
+                       default='10min',
+                       help='Aggregation interval for temperature summaries (default: 10min)')
+    
+    parser.add_argument('--simulation', action='store_true',
+                       help='Run in simulation mode (no hardware required)')
+    
+    parser.add_argument('--duration', type=float, metavar='MINUTES',
+                       help='Monitor duration in minutes (unlimited if not specified)')
+    
+    parser.add_argument('--verbose', action='store_true',
+                       help='Show detailed output and logs')
+    
+    parser.add_argument('--calibrate', action='store_true',
+                       help='Run interactive calibration mode')
+    
+    parser.add_argument('--create-config', action='store_true',
+                       help='Create sample configuration files')
+    
+    args = parser.parse_args()
+    
+    # Handle command line options
+    if args.create_config:
+        create_sample_aws_config()
+        create_sample_testbed_config()
+        return
+    
+    if args.calibrate:
+        calibrate_sensor_interactive(simulation_mode=args.simulation)
+        return
+    
+    # Direct monitoring mode with new parameters
+    simple_mode = not args.verbose
+    
+    monitor = ProductionThermalMonitor(
+        simulation_mode=args.simulation,
+        aggregation_interval=args.interval,
+        simple_mode=simple_mode
+    )
+    
+    success = monitor.run_monitoring(duration_minutes=args.duration)
     
     if success:
-        print("✅ Monitoring completed successfully")
+        print("\n✅ Monitoring completed successfully")
     else:
-        print("❌ Monitoring failed")
+        print("\n❌ Monitoring failed")
 
 if __name__ == '__main__':
     main()
