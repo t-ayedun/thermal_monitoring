@@ -155,7 +155,7 @@ class SimpleDisplay:
             return "1-hour"
         else:
             return f"{seconds}s"
-    """
+    
     def show_current_reading(self, temps, reading_count):
         # Show simple current temperature reading
         current_time = time.time()
@@ -165,7 +165,7 @@ class SimpleDisplay:
             status = self._get_simple_status(temps['max_temp'])
             print(f"\r📊 Current: {temps['avg_temp']:.1f}°C | Max: {temps['max_temp']:.1f}°C | Status: {status} | Readings: {reading_count}", 
                   end='', flush=True)
-            self.last_summary_time = current_time"""
+            self.last_summary_time = current_time
     
     def _get_simple_status(self, max_temp):
         """Simple status indicator"""

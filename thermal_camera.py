@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced MLX90640 Thermal Monitor with AWS IoT Core Integration
-Supports 1-minute granularity data aggregation and MQTT publishing
+Supports 10-minute granularity data aggregation and MQTT publishing
 """
 
 import time
@@ -31,7 +31,7 @@ from awsiot import mqtt_connection_builder
 class ThermalDataAggregator:
     """Handles data collection and aggregation for thermal readings"""
     
-    def __init__(self, aggregation_interval=60):
+    def __init__(self, aggregation_interval=600):
         self.aggregation_interval = aggregation_interval  # seconds
         self.readings_buffer = deque()
         self.last_aggregation_time = time.time()
@@ -375,7 +375,7 @@ class EnhancedThermalMonitor:
         """Save aggregated data to CSV file"""
         try:
             row_data = {
-                'timestamp': data['iso_timestamp'],
+                'timestamp': data['timestamp'],
                 'min_temp': data['temperature_stats']['min_temp']['value'],
                 'avg_temp': data['temperature_stats']['avg_temp']['value'],
                 'max_temp': data['temperature_stats']['max_temp']['value'],
@@ -437,7 +437,7 @@ class EnhancedThermalMonitor:
         if testbed_connected:
             logging.info("Testbed integration active")
         
-        logging.info("Starting thermal monitoring with 1-minute aggregation...")
+        logging.info("Starting thermal monitoring with 10-minute aggregation...")
         
         try:
             while self.running:
@@ -455,7 +455,7 @@ class EnhancedThermalMonitor:
                     logging.debug(f"Thermal reading: Avg={thermal_reading['avg_temp']:.2f}°C, "
                                 f"Range=[{thermal_reading['min_temp']:.2f}, {thermal_reading['max_temp']:.2f}]")
                 
-                # Check if it's time for 1-minute aggregation
+                # Check if it's time for 10-minute aggregation
                 if self.data_aggregator.should_aggregate():
                     aggregated_data = self.data_aggregator.get_aggregated_data()
                     
@@ -476,11 +476,11 @@ class EnhancedThermalMonitor:
                         # Log aggregated results
                         avg_temp = aggregated_data['temperature_stats']['avg_temp']['value']
                         sample_count = aggregated_data['sample_count']
-                        logging.info(f"1-minute summary: Avg temp={avg_temp:.2f}°C "
+                        logging.info(f"10-minute summary: Avg temp={avg_temp:.2f}°C "
                                    f"(from {sample_count} samples)")
                 
-                # Wait before next reading (2-second interval)
-                time.sleep(2.0)
+                # Wait before next reading (1-second interval)
+                time.sleep(1.0)
                 
         except KeyboardInterrupt:
             logging.info("Monitoring stopped by user")
