@@ -122,6 +122,17 @@ class ThermalConfig:
     # === LOGGING BEHAVIOR (Production Safety) ===
     LOG_FULL_FRAME_ON = ["CRITICAL", "EMERGENCY"]  # When to save full thermal frames
 
+# ====== LOGGING SETUP (Production Safety) ======
+os.makedirs(ThermalConfig.LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(ThermalConfig.LOG_DIR, ThermalConfig.LOG_FILE)),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("thermal_monitor")
 # Simple display formatter
 class SimpleDisplay:
     """Clean, minimal display for temperature monitoring"""
