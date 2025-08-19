@@ -231,14 +231,14 @@ Examples:
 
 # ====== MOCK SENSOR (from Production Safety + IoT Enhancement) ======
 """class MockMLX90640:
-    """Realistic mock sensor for development and testing without hardware"""
+    #Realistic mock sensor for development and testing without hardware
     
     def __init__(self):
         self.frame_count = 0
         self.base_temp = 25.0
         
     def getFrame(self, frame=None):
-        """Generate realistic thermal frame data"""
+        #Generate realistic thermal frame data
         # Simulate realistic thermal variations
         self.frame_count += 1
         time_factor = time.time() * 0.1
