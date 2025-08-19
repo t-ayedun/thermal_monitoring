@@ -584,11 +584,13 @@ class ProductionThermalMonitor:
         self.aws_publisher = AWSIoTPublisher()
         self.testbed = TestbedIntegration()
         
-            # === SIMPLE DISPLAY ===
+        # === SIMPLE DISPLAY ===
         if simple_mode:
             self.display = SimpleDisplay(ThermalConfig.AGGREGATION_INTERVAL)
-            # Reduce logging noise
-            logging.getLogger().setLevel(logging.WARNING)
+            # Completely silence logging in simple mode
+            logging.getLogger().setLevel(logging.CRITICAL)
+            # Also silence other loggers
+            logging.getLogger("thermal_monitor").setLevel(logging.CRITICAL)
 
         # === DATA PERSISTENCE ===
         self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1011,7 +1013,11 @@ class ProductionThermalMonitor:
         #Main monitoring loop combining safety checks with IoT publishing
         
         # === INITIALIZATION PHASE ===
-        logger.info("🚀 Starting production thermal monitoring with IoT integration...")
+        if not (hasattr(self, 'simple_mode') and self.simple_mode):
+            logger.info("🚀 Starting production thermal monitoring with IoT integration...")
+        else:
+            print(f"🌡️ Starting {self.display.interval_name} thermal monitoring...")
+            print("Collecting readings... (summaries will appear every 10 minutes)")
         
         # Initialize sensor with safety checks (Production Safety)
         if not self._initialize_sensor():
