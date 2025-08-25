@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformer Temperature Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .connection-status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .connected { background: #4CAF50; }
+        .disconnected { background: #f44336; }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            color: #FFD700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .temperature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .temp-reading {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .temp-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .temp-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+
+        .status-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-normal { background: #4CAF50; }
+        .status-warning { background: #FF9800; }
+        .status-critical { background: #f44336; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .thermal-map {
+            display: grid;
+            grid-template-columns: repeat(32, 1fr);
+            grid-template-rows: repeat(24, 1fr);
+            gap: 1px;
+            height: 200px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .thermal-pixel {
+            transition: background-color 0.3s ease;
+        }
+
+        .alerts-container {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #FF9800;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .alert-critical {
+            border-left-color: #f44336;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .data-table th {
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: bold;
+        }
+
+        .last-update {
+            text-align: center;
+            margin-top: 20px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌡️ Transformer Temperature Monitor</h1>
+        <div class="connection-status" id="connectionStatus">⚡ Connecting...</div>
+    </div>
+
+    <div class="dashboard">
+        <!-- Current Readings Card -->
+        <div class="card">
+            <h2>📊 Current Readings</h2>
+            <div class="temperature-grid">
+                <div class="temp-reading">
+                    <div class="temp-label">Minimum</div>
+                    <div class="temp-value" id="minTemp">--°C</div>
+                </div>
+                <div class="temp-reading">
+                    <div class="temp-label">Average</div>
+                    <div class="temp-value" id="avgTemp">--°C</div>
+                </div>
+                <div class="temp-reading">
+                    <div class="temp-label">Maximum</div>
+                    <div class="temp-value" id="maxTemp">--°C</div>
+                </div>
+            </div>
+            
+            <div class="status-indicator">
+                <div class="status-dot status-normal" id="statusDot"></div>
+                <span id="statusText">NORMAL</span>
+            </div>
+        </div>
+
+        <!-- Temperature Trend Chart -->
+        <div class="card">
+            <h2>📈 Temperature Trend</h2>
+            <div class="chart-container">
+                <canvas id="tempChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Thermal Map Visualization -->
+        <div class="card">
+            <h2>🔥 Thermal Map</h2>
+            <div class="thermal-map" id="thermalMap"></div>
+            <div style="margin-top: 10px;">
+                <small>Hotspot Location: <span id="hotspotLocation">--</span></small>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="card">
+            <h2>⚙️ System Status</h2>
+            <table class="data-table">
+                <tr>
+                    <th>Parameter</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Device ID</td>
+                    <td id="deviceId">transformer_thermal_01</td>
+                </tr>
+                <tr>
+                    <td>Location</td>
+                    <td id="location">Main Transformer</td>
+                </tr>
+                <tr>
+                    <td>Last Reading</td>
+                    <td id="lastReading">--</td>
+                </tr>
+                <tr>
+                    <td>Data Points</td>
+                    <td id="dataPoints">0</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Recent Alerts -->
+        <div class="card">
+            <h2>🚨 Recent Alerts</h2>
+            <div class="alerts-container" id="alertsContainer">
+                <div style="text-align: center; opacity: 0.6; margin: 20px 0;">
+                    No alerts yet
+                </div>
+            </div>
+        </div>
+
+        <!-- MQTT Messages -->
+        <div class="card">
+            <h2>📡 Live MQTT Data</h2>
+            <div id="mqttMessages" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; font-family: monospace; font-size: 0.8rem; max-height: 200px; overflow-y: auto;">
+                Waiting for data...
+            </div>
+        </div>
+    </div>
+
+    <div class="last-update">
+        Last updated: <span id="lastUpdate">Never</span>
+    </div>
+
+    <script>
+        // MQTT Configuration
+        const MQTT_BROKER = 'ws://localhost:8080'; // WebSocket MQTT broker
+        const MQTT_TOPICS = {
+            main: 'transformer/temperature/main',
+            alerts: 'transformer/alerts',
+            aws: 'aws/transformer/telemetry'
+        };
+
+        // Global variables
+        let mqttClient;
+        let temperatureChart;
+        let temperatureData = [];
+        let alertCount = 0;
+        let dataPointCount = 0;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeThermalMap();
+            initializeChart();
+            connectMQTT();
+        });
+
+        // Initialize thermal map grid
+        function initializeThermalMap() {
+            const thermalMap = document.getElementById('thermalMap');
+            for (let i = 0; i < 768; i++) { // 32x24 = 768 pixels
+                const pixel = document.createElement('div');
+                pixel.className = 'thermal-pixel';
+                pixel.style.backgroundColor = '#333';
+                thermalMap.appendChild(pixel);
+            }
+        }
+
+        // Initialize temperature chart
+        function initializeChart() {
+            const ctx = document.getElementById('tempChart').getContext('2d');
+            temperatureChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Max Temperature',
+                        data: [],
+                        borderColor: '#FF6B6B',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Avg Temperature',
+                        data: [],
+                        borderColor: '#4ECDC4',
+                        backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Min Temperature',
+                        data: [],
+                        borderColor: '#45B7D1',
+                        backgroundColor: 'rgba(69, 183, 209, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: 'white' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)',
+                                color: 'white'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Connect to MQTT broker
+        function connectMQTT() {
+            try {
+                mqttClient = new Paho.MQTT.Client('localhost', 8080, 'dashboard_' + Date.now());
+                
+                mqttClient.onConnectionLost = onConnectionLost;
+                mqttClient.onMessageArrived = onMessageArrived;
+
+                mqttClient.connect({
+                    onSuccess: onMQTTConnect,
+                    onFailure: onMQTTFailure,
+                    useSSL: false
+                });
+            } catch (error) {
+                console.error('MQTT connection error:', error);
+                updateConnectionStatus(false);
+                // Start simulation mode if MQTT fails
+                startSimulationMode();
+            }
+        }
+
+        function onMQTTConnect() {
+            console.log('Connected to MQTT broker');
+            updateConnectionStatus(true);
+            
+            // Subscribe to topics
+            Object.values(MQTT_TOPICS).forEach(topic => {
+                mqttClient.subscribe(topic);
+                console.log('Subscribed to:', topic);
+            });
+        }
+
+        function onMQTTFailure(error) {
+            console.error('MQTT connection failed:', error);
+            updateConnectionStatus(false);
+            // Start simulation mode
+            startSimulationMode();
+        }
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log('MQTT connection lost:', responseObject.errorMessage);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function onMessageArrived(message) {
+            try {
+                const topic = message.destinationName;
+                const payload = JSON.parse(message.payloadString);
+                
+                logMQTTMessage(topic, payload);
+                
+                if (topic === MQTT_TOPICS.main) {
+                    updateMainDisplay(payload);
+                } else if (topic === MQTT_TOPICS.alerts) {
+                    addAlert(payload);
+                }
+            } catch (error) {
+                console.error('Error processing MQTT message:', error);
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.textContent = '🟢 Connected to MQTT';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '🔴 MQTT Disconnected';
+                statusElement.className = 'connection-status disconnected';
+            }
+        }
+
+        // Update main temperature display
+        function updateMainDisplay(data) {
+            // Update temperature readings
+            document.getElementById('minTemp').textContent = data.temperatures.min + '°C';
+            document.getElementById('avgTemp').textContent = data.temperatures.avg + '°C';
+            document.getElementById('maxTemp').textContent = data.temperatures.max + '°C';
+            
+            // Update status
+            updateStatus(data.status);
+            
+            // Update hotspot location
+            document.getElementById('hotspotLocation').textContent = 
+                `(${data.hotspot.x}, ${data.hotspot.y}) - ${data.hotspot.temp}°C`;
+            
+            // Update chart
+            updateChart(data);
+            
+            // Update system info
+            document.getElementById('lastReading').textContent = 
+                new Date(data.timestamp).toLocaleTimeString();
+            document.getElementById('dataPoints').textContent = ++dataPointCount;
+            
+            // Update last update time
+            document.getElementById('lastUpdate').textContent = 
+                new Date().toLocaleTimeString();
+            
+            // Update thermal map if raw data available
+            if (data.raw_data) {
+                updateThermalMap(data.raw_data);
+            }
+        }
+
+        // Update status indicator
+        function updateStatus(status) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusDot.className = 'status-dot';
+            
+            switch (status) {
+                case 'NORMAL':
+                    statusDot.classList.add('status-normal');
+                    break;
+                case 'WARNING':
+                    statusDot.classList.add('status-warning');
+                    break;
+                case 'CRITICAL':
+                    statusDot.classList.add('status-critical');
+                    break;
+            }
+            
+            statusText.textContent = status;
+        }
+
+        // Update temperature chart
+        function updateChart(data) {
+            const now = new Date().toLocaleTimeString();
+            
+            temperatureChart.data.labels.push(now);
+            temperatureChart.data.datasets[0].data.push(data.temperatures.max);
+            temperatureChart.data.datasets[1].data.push(data.temperatures.avg);
+            temperatureChart.data.datasets[2].data.push(data.temperatures.min);
+            
+            // Keep only last 20 data points
+            if (temperatureChart.data.labels.length > 20) {
+                temperatureChart.data.labels.shift();
+                temperatureChart.data.datasets.forEach(dataset => dataset.data.shift());
+            }
+            
+            temperatureChart.update('none');
+        }
+
+        // Update thermal map visualization
+        function updateThermalMap(rawData) {
+            const pixels = document.querySelectorAll('.thermal-pixel');
+            const minTemp = Math.min(...rawData);
+            const maxTemp = Math.max(...rawData);
+            const tempRange = maxTemp - minTemp;
+            
+            rawData.forEach((temp, index) => {
+                if (pixels[index]) {
+                    const intensity = (temp - minTemp) / tempRange;
+                    const hue = 240 - (intensity * 240); // Blue to Red
+                    pixels[index].style.backgroundColor = `hsl(${hue}, 70%, 50%)`;
+                    pixels[index].title = `${temp.toFixed(1)}°C`;
+                }
+            });
+        }
+
+        // Add alert to alerts panel
+        function addAlert(alertData) {
+            const alertsContainer = document.getElementById('alertsContainer');
+            
+            // Clear "no alerts" message
+            if (alertsContainer.innerHTML.includes('No alerts yet')) {
+                alertsContainer.innerHTML = '';
+            }
+            
+            const alertItem = document.createElement('div');
+            alertItem.className = 'alert-item';
+            if (alertData.alert_level === 'CRITICAL') {
+                alertItem.classList.add('alert-critical');
+            }
+            
+            alertItem.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong>${alertData.alert_level}</strong>
+                    <small>${new Date(alertData.timestamp).toLocaleTimeString()}</small>
+                </div>
+                <div>Temperature: ${alertData.temperature}°C</div>
+                <div>Location: ${alertData.location}</div>
+                <div>Threshold: ${alertData.threshold_exceeded}°C</div>
+            `;
+            
+            alertsContainer.insertBefore(alertItem, alertsContainer.firstChild);
+            
+            // Keep only last 5 alerts
+            const alerts = alertsContainer.children;
+            while (alerts.length > 5) {
+                alertsContainer.removeChild(alerts[alerts.length - 1]);
+            }
+        }
+
+        // Log MQTT message
+        function logMQTTMessage(topic, payload) {
+            const mqttMessages = document.getElementById('mqttMessages');
+            const timestamp = new Date().toLocaleTimeString();
+            const shortTopic = topic.split('/').pop();
+            
+            const message = `[${timestamp}] ${shortTopic}: ${JSON.stringify(payload, null, 2)}\n`;
+            
+            mqttMessages.textContent = message + mqttMessages.textContent;
+            
+            // Keep only last 1000 characters
+            if (mqttMessages.textContent.length > 1000) {
+                mqttMessages.textContent = mqttMessages.textContent.substring(0, 1000) + '...';
+            }
+        }
+
+        // Simulation mode (when MQTT is not available)
+        function startSimulationMode() {
+            console.log('Starting simulation mode...');
+            
+            setInterval(() => {
+                const simulatedData = {
+                    timestamp: new Date().toISOString(),
+                    device_id: 'transformer_thermal_01',
+                    location: 'Main Transformer',
+                    temperatures: {
+                        min: (25 + Math.random() * 5).toFixed(1),
+                        max: (65 + Math.random() * 15).toFixed(1),
+                        avg: (45 + Math.random() * 10).toFixed(1)
+                    },
+                    hotspot: {
+                        x: Math.floor(Math.random() * 32),
+                        y: Math.floor(Math.random() * 24),
+                        temp: (65 + Math.random() * 15).toFixed(1)
+                    },
+                    status: Math.random() > 0.8 ? 'WARNING' : 'NORMAL'
+                };
+                
+                updateMainDisplay(simulatedData);
+                logMQTTMessage('simulation', simulatedData);
+                
+                // Occasionally generate alerts
+                if (Math.random() > 0.9) {
+                    const alertData = {
+                        timestamp: new Date().toISOString(),
+                        alert_level: Math.random() > 0.5 ? 'WARNING' : 'CRITICAL',
+                        temperature: (70 + Math.random() * 20).toFixed(1),
+                        threshold_exceeded: 70,
+                        location: `Position (${Math.floor(Math.random() * 32)}, ${Math.floor(Math.random() * 24)})`
+                    };
+                    addAlert(alertData);
+                }
+                
+            }, 5000); // Update every 5 seconds in simulation
+            
+            // Update connection status to show simulation
+            document.getElementById('connectionStatus').textContent = '🔄 Simulation Mode';
+            document.getElementById('connectionStatus').className = 'connection-status';
+            document.getElementById('connectionStatus').style.background = '#FF9800';
+        }
+    </script>
+</body>
+</html>
