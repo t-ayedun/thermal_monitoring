@@ -177,7 +177,7 @@ class TemperatureMonitor:
         
         # Publish to different topics
         self.mqtt_client.publish("transformer/temperature/main", 
-                               json.dumps(main_payload))
+                               json.dumps(main_payload, default=lambda x: float(x) if isinstance(x, (np.integer, np.floating)) else x))
         
         # Alert topic (only for warnings/critical)
         if analysis['status'] != 'NORMAL':
